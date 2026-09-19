@@ -1,0 +1,4 @@
+import {runtime,rows,db} from '../../../lib/data';
+import {safeEqual,digest} from '../../../lib/security';
+import {processSearch} from '../../../lib/jobs';
+export async function POST(req:Request){const key=runtime().CRON_SECRET;const supplied=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';if(!key||!safeEqual(await digest(supplied),await digest(key)))return Response.json({error:'Unauthorized'},{status:401});const jobs=await rows("SELECT id FROM jobs WHERE status IN ('pending','running') AND lease<? ORDER BY created LIMIT 1",Date.now());const results=[];for(const job of jobs){try{results.push(await processSearch(job.id as string))}catch{results.push({ok:false})}}await db().batch([db().prepare('DELETE FROM sessions WHERE expires<?').bind(Date.now()),db().prepare('DELETE FROM attempts WHERE expires<?').bind(Date.now())]);return Response.json({processed:results.length,results},{headers:{'Cache-Control':'no-store'}})}

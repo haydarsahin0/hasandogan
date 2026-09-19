@@ -1,0 +1,30 @@
+name: Continue doctor discovery
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+permissions: {}
+concurrency:
+  group: doctor-discovery
+  cancel-in-progress: false
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTAL_ORIGIN: ${{ secrets.PORTAL_ORIGIN }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Process queued searches when configured
+        shell: bash
+        run: |
+          if [ -z "$PORTAL_ORIGIN" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Discovery scheduler is not configured. Set PORTAL_ORIGIN and CRON_SECRET."
+            exit 0
+          fi
+          case "$PORTAL_ORIGIN" in https://*) ;; *) echo "HTTPS origin required"; exit 1;; esac
+          for step in 1 2 3 4 5; do
+            curl --fail --silent --show-error --max-time 40 --request POST \
+              --header "Authorization: Bearer $CRON_SECRET" \
+              "$PORTAL_ORIGIN/api/automation"
+          done
